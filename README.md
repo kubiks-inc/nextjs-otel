@@ -136,24 +136,6 @@ interface TelemetryOptions {
 }
 ```
 
-## API Reference
-
-### `registerTelemetry(options: TelemetryOptions): void`
-
-Main function that registers OpenTelemetry instrumentation with optional console patching.
-
-### `registerOTelWithLogging(config: TelemetryConfig, enableConsolePatching?: boolean): void`
-
-Simplified function for quick setup with default options.
-
-### `flushLogs(): Promise<void>`
-
-Manually flush buffered console logs (usually not needed due to automatic flushing).
-
-### `patchConsole(): void`
-
-Manually patch console methods (called automatically when `enableConsolePatching` is true).
-
 ## License
 
 MIT 
