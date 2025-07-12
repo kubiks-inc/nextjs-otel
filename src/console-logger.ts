@@ -196,17 +196,36 @@ export function patchConsole(): void {
                 .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
                 .join(" ");
 
+            // Build attributes including object parameters
+            const attributes: Record<string, string> = {
+                source: "console",
+                'log.type': method,
+                'service.name': serviceName,
+                'trace.id': traceId,
+                'span.id': spanId,
+            };
+
+            // Add object parameters to attributes for filtering
+            args.forEach((arg) => {
+                if (typeof arg === "object" && arg !== null && !Array.isArray(arg)) {
+                    try {
+                        // Add individual properties directly using field names
+                        Object.entries(arg).forEach(([key, value]) => {
+                            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                                attributes[key] = String(value);
+                            }
+                        });
+                    } catch (error) {
+                        // Skip objects that can't be stringified (circular references, etc.)
+                    }
+                }
+            });
+
             // Send to OpenTelemetry
             logger.emit({
                 body: message,
                 severityText: consoleToSeverity[method as keyof typeof consoleToSeverity],
-                attributes: {
-                    source: "console",
-                    'log.type': method,
-                    'service.name': serviceName,
-                    'trace.id': traceId,
-                    'span.id': spanId,
-                },
+                attributes,
             });
         };
     });
