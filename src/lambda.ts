@@ -1,0 +1,1 @@
+export { withOpenTelemetry } from './lambda/index.ts'

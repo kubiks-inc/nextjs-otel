@@ -1,41 +1,74 @@
 {
-    "name": "@kubiks/otel-nextjs",
-    "version": "1.0.4",
-    "description": "A Next.js OpenTelemetry package",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "publishConfig": {
-        "access": "public"
+  "name": "@kubiks/otel-nextjs",
+  "version": "1.0.8",
+  "description": "Instrument node.js applications with open telemetry ",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
     },
-    "scripts": {
-        "build": "tsc",
-        "dev": "tsc --watch",
-        "prepublishOnly": "npm run build"
+    "./lambda": {
+      "types": "./dist/lambda.d.cts",
+      "default": "./dist/lambda.cjs"
     },
-    "keywords": [
-        "nextjs",
-        "telemetry",
-        "otel",
-        "opentelemetry",
-        "logging",
-        "observability"
-    ],
-    "author": "",
-    "license": "MIT",
-    "dependencies": {
-        "@opentelemetry/sdk-logs": "^0.56.0",
-        "@opentelemetry/api": "^1.9.0",
-        "@opentelemetry/context-async-hooks": "^1.28.0"
-    },
-    "devDependencies": {
-        "typescript": "^5.0.0",
-        "@types/node": "^20.0.0"
-    },
-    "peerDependencies": {
-        "next": ">=13.0.0",
-        "@vercel/otel": ">=1.9.0"
-    },
-    "files": [
-        "dist/**/*"
-    ]
+    "./trpc": {
+      "types": "./dist/trpc.d.cts",
+      "default": "./dist/trpc.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@release-it/keep-a-changelog": "^4.0.0",
+    "@types/node": "^20.8.6",
+    "esbuild": "^0.19.4",
+    "mockttp": "^3.9.4",
+    "patch-package": "^8.0.0",
+    "release-it": "^16.2.1",
+    "tsup": "^7.2.0",
+    "typescript": "^5.2.2",
+    "vitest": "^0.34.6"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsup",
+    "test": "vitest",
+    "release": "release-it"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kubiks-inc/otel-nextjs.git"
+  },
+  "keywords": [
+    "kubiks",
+    "otel",
+    "opentelemetry",
+    "tracing",
+    "node.js"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kubiks-inc/otel-nextjs/issues"
+  },
+  "homepage": "https://github.com/kubiks-inc/otel-nextjs#readme",
+  "peerDependencies": {
+    "@trpc/server": "^10.0.0 || ^11.0.0"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.50.0",
+    "@opentelemetry/instrumentation": "^0.50.0",
+    "@opentelemetry/instrumentation-http": "^0.50.0",
+    "@opentelemetry/resource-detector-aws": "^1.4.1",
+    "@opentelemetry/resources": "^1.23.0",
+    "@opentelemetry/sdk-node": "^0.50.0",
+    "@opentelemetry/sdk-trace-node": "^1.23.0",
+    "@types/aws-lambda": "^8.10.136",
+    "axios": "^1.6.8",
+    "flat": "^6.0.1",
+    "undici": "^6.11.1"
+  }
 }
