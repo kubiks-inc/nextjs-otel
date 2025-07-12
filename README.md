@@ -14,11 +14,11 @@ A Next.js telemetry package that provides automatic OpenTelemetry instrumentatio
 ## Installation
 
 ```bash
-npm install kubiks/nextjs-otel
+npm install @kubiks/nextjs-otel
 # or
-yarn add kubiks/nextjs-otel
+yarn add @kubiks/nextjs-otel
 # or
-pnpm add kubiks/nextjs-otel
+pnpm add @kubiks/nextjs-otel
 ```
 
 ## Usage
