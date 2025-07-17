@@ -7,7 +7,7 @@ import { HttpInstrumentationConfig } from "./http/types.ts"
 import { parse } from 'querystring'
 import { PassThrough } from "stream";
 
-type BetterHttpInstrumentationOptions = {
+export type BetterHttpInstrumentationOptions = {
     plugins?: HttpPlugin[],
     captureBody?: boolean,
     captureHeaders?: boolean,
@@ -17,6 +17,9 @@ type BetterHttpInstrumentationOptions = {
     ignoreOutgoingRequestHook?: HttpInstrumentationConfig['ignoreOutgoingRequestHook']
     startIncomingSpanHook?: HttpInstrumentationConfig['startIncomingSpanHook']
     startOutgoingSpanHook?: HttpInstrumentationConfig['startOutgoingSpanHook']
+    includeUndiciInstrumentation?: boolean
+    requireParentforOutgoingSpans?: boolean
+    requireParentforIncomingSpans?: boolean
 }
 
 export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOptions = {}) {
@@ -212,6 +215,8 @@ export class BetterHttpInstrumentation extends HttpInstrumentation {
             ignoreOutgoingRequestHook: options.ignoreOutgoingRequestHook,
             startIncomingSpanHook: options.startIncomingSpanHook,
             startOutgoingSpanHook: options.startOutgoingSpanHook,
+            requireParentforOutgoingSpans: options.requireParentforOutgoingSpans,
+            requireParentforIncomingSpans: options.requireParentforIncomingSpans,
         })
     }
 }

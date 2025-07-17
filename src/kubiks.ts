@@ -7,6 +7,8 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { InstrumentationOption, registerInstrumentations } from '@opentelemetry/instrumentation';
 import { ServiceDetector } from './resources/service.ts';
 import { KoyebDetector } from './resources/koyeb.ts';
+import { getEnhancedHttpInstrumentations } from './enhanced-http.ts';
+import { VercelPlugin } from './http-plugins/vercel.ts';
 
 type KubiksSDKOpts = {
     instrumentations?: InstrumentationOption[],
@@ -19,13 +21,36 @@ type KubiksSDKOpts = {
     sampler?: Sampler
     resourceDetectors?: DetectorSync[],
     resourceAttributes?: Resource | Attributes
+    /**
+     * Whether to include default instrumentations (HTTP, Undici, etc.)
+     * Set to false to use only custom instrumentations
+     * @default true
+     */
+    includeDefaultInstrumentations?: boolean
 }
 
+/**
+ * Get default instrumentations that work well with Next.js and Node.js applications
+ */
+function getDefaultInstrumentations(): InstrumentationOption[] {
+    return [
+        // Enhanced HTTP instrumentation with undici support for Next.js fetch
+        ...getEnhancedHttpInstrumentations({
+            plugins: [
+                new VercelPlugin() // Automatically include Vercel plugin for common use case
+            ],
+            requireParentforOutgoingSpans: false,
+        })
+    ];
+}
 
 /**
  * KubiksSDK is a wrapper around the OpenTelemetry NodeSDK that configures it to send traces to Kubiks.
  * 
- * @param {InstrumentationOption[]} options.instrumentations - The OpenTelemetry instrumentations to enable.
+ * By default, includes HTTP and Undici instrumentation with Vercel plugin for Next.js compatibility.
+ * 
+ * @param {InstrumentationOption[]} options.instrumentations - Additional OpenTelemetry instrumentations to enable alongside defaults.
+ * @param {boolean} options.includeDefaultInstrumentations - Whether to include default instrumentations (HTTP, Undici, Vercel). Defaults to true.
  * @param {string} options.kubiksKey - The Kubiks API key. Defaults to the KUBIKS_KEY environment variable.
  * @param {string} options.service - The name of the service. 
  * @param {string} options.namespace - The namespace of the service.
@@ -37,10 +62,11 @@ type KubiksSDKOpts = {
 export class KubiksSDK {
     options: KubiksSDKOpts;
     attributes: ResourceAttributes;
-    constructor(options: KubiksSDKOpts) {
+    constructor(options: KubiksSDKOpts = {}) {
         options.serverless = options.serverless || false;
         options.collectorUrl = options.collectorUrl || process.env.COLLECTOR_URL || "https://otlp.kubiks.ai";
-        options.kubiksKey = options.kubiksKey || process.env.KUBIKS_API_KEY || process.env.KUBIKS_KEY
+        options.kubiksKey = options.kubiksKey || process.env.KUBIKS_API_KEY || process.env.KUBIKS_KEY;
+        options.includeDefaultInstrumentations = options.includeDefaultInstrumentations !== false; // Default to true
 
         this.options = options;
     }
@@ -102,10 +128,14 @@ export class KubiksSDK {
 
         provider.register();
 
+        // Combine default instrumentations with user-provided ones
+        const allInstrumentations = [
+            ...(this.options.includeDefaultInstrumentations ? getDefaultInstrumentations() : []),
+            ...(this.options.instrumentations || [])
+        ];
+
         registerInstrumentations({
-            instrumentations: [
-                ...this.options.instrumentations || []
-            ]
+            instrumentations: allInstrumentations
         });
         return provider;
     }
