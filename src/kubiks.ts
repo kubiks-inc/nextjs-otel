@@ -7,7 +7,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { InstrumentationOption, registerInstrumentations } from '@opentelemetry/instrumentation';
 import { ServiceDetector } from './resources/service.ts';
 import { KoyebDetector } from './resources/koyeb.ts';
-import { getEnhancedHttpInstrumentations } from './enhanced-http.ts';
+import { getEnhancedHttpInstrumentations, EnhancedHttpInstrumentationOptions } from './enhanced-http.ts';
 import { VercelPlugin } from './http-plugins/vercel.ts';
 
 type KubiksSDKOpts = {
@@ -27,12 +27,18 @@ type KubiksSDKOpts = {
      * @default true
      */
     includeDefaultInstrumentations?: boolean
+    /**
+     * Enable full fetch response body capture using fetch interception
+     * This provides complete request/response body capture for fetch calls
+     * @default true
+     */
+    enableFetchBodyCapture?: boolean
 }
 
 /**
  * Get default instrumentations that work well with Next.js and Node.js applications
  */
-function getDefaultInstrumentations(): InstrumentationOption[] {
+function getDefaultInstrumentations(options: KubiksSDKOpts = {}): InstrumentationOption[] {
     return [
         // Enhanced HTTP instrumentation with undici support for Next.js fetch
         ...getEnhancedHttpInstrumentations({
@@ -40,6 +46,9 @@ function getDefaultInstrumentations(): InstrumentationOption[] {
                 new VercelPlugin() // Automatically include Vercel plugin for common use case
             ],
             requireParentforOutgoingSpans: false,
+            captureBody: true, // Enable request/response body capture
+            captureHeaders: true, // Enable header capture
+            enableFetchBodyCapture: options.enableFetchBodyCapture !== false, // Enable full fetch body capture by default
         })
     ];
 }
@@ -51,6 +60,7 @@ function getDefaultInstrumentations(): InstrumentationOption[] {
  * 
  * @param {InstrumentationOption[]} options.instrumentations - Additional OpenTelemetry instrumentations to enable alongside defaults.
  * @param {boolean} options.includeDefaultInstrumentations - Whether to include default instrumentations (HTTP, Undici, Vercel). Defaults to true.
+ * @param {boolean} options.enableFetchBodyCapture - Enable full fetch response body capture using interception. Defaults to true.
  * @param {string} options.kubiksKey - The Kubiks API key. Defaults to the KUBIKS_KEY environment variable.
  * @param {string} options.service - The name of the service. 
  * @param {string} options.namespace - The namespace of the service.
@@ -67,6 +77,7 @@ export class KubiksSDK {
         options.collectorUrl = options.collectorUrl || process.env.COLLECTOR_URL || "https://otlp.kubiks.ai";
         options.kubiksKey = options.kubiksKey || process.env.KUBIKS_API_KEY || process.env.KUBIKS_KEY;
         options.includeDefaultInstrumentations = options.includeDefaultInstrumentations !== false; // Default to true
+        options.enableFetchBodyCapture = options.enableFetchBodyCapture !== false; // Default to true
 
         this.options = options;
     }
@@ -130,7 +141,7 @@ export class KubiksSDK {
 
         // Combine default instrumentations with user-provided ones
         const allInstrumentations = [
-            ...(this.options.includeDefaultInstrumentations ? getDefaultInstrumentations() : []),
+            ...(this.options.includeDefaultInstrumentations ? getDefaultInstrumentations(this.options) : []),
             ...(this.options.instrumentations || [])
         ];
 

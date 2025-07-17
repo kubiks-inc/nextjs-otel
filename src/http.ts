@@ -41,7 +41,7 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
                     if (plugin.captureBody) {
                         getClientRequestBody(request, (body) => {
                             const requestData = _parseBodySafe(body, headers);
-                            span.setAttributes(flatten({ request: { body: requestData } }));
+                            span.setAttribute('request.body', typeof requestData === 'string' ? requestData : JSON.stringify(requestData));
                         })
                     }
                 } else {
@@ -56,7 +56,7 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
                     if (options.captureBody && shouldCaptureBody(request.host)) {
                         getClientRequestBody(request, (body) => {
                             const requestData = _parseBodySafe(body, headers);
-                            span.setAttributes(flatten({ request: { body: requestData } }));
+                            span.setAttribute('request.body', typeof requestData === 'string' ? requestData : JSON.stringify(requestData));
                         })
 
                     }
@@ -90,7 +90,7 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
                     if (options.captureBody && shouldCaptureBody(response.url || '')) {
                         getClientResponseBody(response, (body) => {
                             const responseData = _parseBodySafe(body, headers);
-                            span.setAttributes(flatten({ response: { body: responseData } }));
+                            span.setAttribute('response.body', typeof responseData === 'string' ? responseData : JSON.stringify(responseData));
                             cb();
                         })
                     } else {
