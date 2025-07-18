@@ -14,15 +14,26 @@ export interface EnhancedHttpInstrumentationOptions extends BetterHttpInstrument
 }
 
 /**
- * Enhanced HTTP Instrumentation using ONLY fetch interceptor by default
- * to prevent duplicate spans while providing comprehensive body capture for fetch calls
+ * Enhanced HTTP Instrumentation with server-side instrumentation for incoming requests
+ * and fetch interceptor for outgoing client calls to prevent duplicate spans
  */
 export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumentationOptions = {}): InstrumentationOption[] {
     const instrumentations: InstrumentationOption[] = [];
     
-    // Default to fetch interceptor ONLY (enableFetchBodyCapture defaults to true)
+    // ALWAYS include server-side HTTP instrumentation for incoming Next.js requests
+    // This is configured to only instrument incoming requests, not outgoing client calls
+    instrumentations.push(new BetterHttpInstrumentation({
+        ...options,
+        // Disable outgoing request instrumentation to prevent conflicts with fetch interceptor
+        ignoreOutgoingRequestHook: () => true, // Skip all outgoing requests
+        // Only instrument incoming server requests
+        ignoreIncomingRequestHook: options.ignoreIncomingRequestHook,
+    }));
+    console.debug('BetterHttpInstrumentation: Enabled for server-side (incoming requests only)');
+    
+    // Default to fetch interceptor for outgoing client calls (enableFetchBodyCapture defaults to true)
     if (options.enableFetchBodyCapture !== false) {
-        // Use fetch interceptor ONLY - no other HTTP instrumentations
+        // Use fetch interceptor for outgoing client calls only
         try {
             enableFetchBodyCapture({
                 captureRequestBody: options.captureBody,
@@ -30,12 +41,20 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureHeaders: options.captureHeaders,
                 maxBodySize: 5242880, // 5MB
             });
-            console.debug('Fetch interceptor enabled as the ONLY HTTP instrumentation');
+            console.debug('Fetch interceptor enabled for outgoing client calls');
         } catch (error) {
             console.warn('Failed to enable fetch body capture:', error.message);
+            // Fallback to undici for outgoing calls if fetch interceptor fails
+            instrumentations.push(new EnhancedUndiciInstrumentation({
+                requireParentforSpans: options.requireParentforOutgoingSpans,
+                captureRequestBody: options.captureBody,
+                captureResponseBody: options.captureBody,
+                captureHeaders: options.captureHeaders,
+            }));
+            console.debug('EnhancedUndiciInstrumentation: Enabled as fallback for outgoing calls');
         }
     } else {
-        // Only if explicitly disabled, fall back to undici
+        // If fetch interceptor is explicitly disabled, use undici for outgoing calls
         try {
             instrumentations.push(new EnhancedUndiciInstrumentation({
                 requireParentforSpans: options.requireParentforOutgoingSpans,
@@ -43,11 +62,9 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureResponseBody: options.captureBody,
                 captureHeaders: options.captureHeaders,
             }));
-            console.debug('EnhancedUndiciInstrumentation: Enabled (fetch interceptor disabled)');
+            console.debug('EnhancedUndiciInstrumentation: Enabled for outgoing calls (fetch interceptor disabled)');
         } catch (error) {
-            console.warn('EnhancedUndiciInstrumentation not available, falling back to BetterHttpInstrumentation', error.message);
-            instrumentations.push(new BetterHttpInstrumentation(options));
-            console.debug('BetterHttpInstrumentation: Enabled as fallback');
+            console.warn('EnhancedUndiciInstrumentation not available:', error.message);
         }
     }
     
