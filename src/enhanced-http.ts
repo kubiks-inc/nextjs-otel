@@ -20,29 +20,21 @@ export interface EnhancedHttpInstrumentationOptions extends BetterHttpInstrument
 export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumentationOptions = {}): InstrumentationOption[] {
     const instrumentations: InstrumentationOption[] = [];
     
-    // Always include the Better HTTP Instrumentation
-    instrumentations.push(new BetterHttpInstrumentation(options));
+    console.debug('EnhancedHttpInstrumentations: Configuring with options', {
+        enableFetchBodyCapture: options.enableFetchBodyCapture,
+        includeUndiciInstrumentation: options.includeUndiciInstrumentation,
+        captureBody: options.captureBody
+    });
     
-    // Include Enhanced Undici instrumentation by default (for Next.js fetch support with payload capture)
-    // BUT disable it if fetch body capture is enabled to avoid conflicts
-    if (options.includeUndiciInstrumentation !== false && !options.enableFetchBodyCapture) {
-        try {
-            instrumentations.push(new EnhancedUndiciInstrumentation({
-                requireParentforSpans: options.requireParentforOutgoingSpans,
-                captureRequestBody: options.captureBody,
-                captureResponseBody: options.captureBody,
-                captureHeaders: options.captureHeaders,
-            }));
-            console.debug('EnhancedUndiciInstrumentation: Enabled (fetch body capture disabled)');
-        } catch (error) {
-            console.warn('EnhancedUndiciInstrumentation not available, skipping. This may affect Next.js fetch tracing.', error.message);
-        }
-    } else if (options.enableFetchBodyCapture) {
-        console.debug('EnhancedUndiciInstrumentation: Disabled (fetch body capture enabled to avoid conflicts)');
-    }
-    
-    // Optionally enable fetch body capture using interception
+    // Strategy: Choose ONE approach to avoid duplicate spans
     if (options.enableFetchBodyCapture) {
+        // Option 1: Use fetch interceptor for client requests + BetterHTTP for server requests
+        console.debug('EnhancedHttpInstrumentations: Using fetch interceptor + BetterHTTP strategy');
+        
+        // BetterHTTP handles server requests (incoming)
+        instrumentations.push(new BetterHttpInstrumentation(options));
+        
+        // Fetch interceptor handles client requests (outgoing fetch calls)
         try {
             enableFetchBodyCapture({
                 captureRequestBody: options.captureBody,
@@ -50,12 +42,35 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureHeaders: options.captureHeaders,
                 maxBodySize: 10000,
             });
-            console.debug('Fetch body capture enabled via interception');
+            console.debug('EnhancedHttpInstrumentations: Fetch interceptor enabled');
         } catch (error) {
-            console.warn('Failed to enable fetch body capture:', error.message);
+            console.warn('EnhancedHttpInstrumentations: Failed to enable fetch interceptor:', error.message);
+        }
+        
+    } else {
+        // Option 2: Use BetterHTTP + EnhancedUndici (traditional OpenTelemetry approach)
+        console.debug('EnhancedHttpInstrumentations: Using BetterHTTP + EnhancedUndici strategy');
+        
+        // BetterHTTP handles both server and client HTTP requests
+        instrumentations.push(new BetterHttpInstrumentation(options));
+        
+        // EnhancedUndici handles fetch requests specifically
+        if (options.includeUndiciInstrumentation !== false) {
+            try {
+                instrumentations.push(new EnhancedUndiciInstrumentation({
+                    requireParentforSpans: options.requireParentforOutgoingSpans,
+                    captureRequestBody: options.captureBody,
+                    captureResponseBody: options.captureBody,
+                    captureHeaders: options.captureHeaders,
+                }));
+                console.debug('EnhancedHttpInstrumentations: EnhancedUndici enabled');
+            } catch (error) {
+                console.warn('EnhancedHttpInstrumentations: EnhancedUndici not available:', error.message);
+            }
         }
     }
     
+    console.debug('EnhancedHttpInstrumentations: Configured', instrumentations.length, 'instrumentations');
     return instrumentations;
 }
 

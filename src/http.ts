@@ -66,11 +66,32 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
             if (request instanceof IncomingMessage) {
                 const plugin = options.plugins.find(plugin => plugin.shouldParseRequest && plugin.shouldParseRequest(request));
 
-                span.setAttribute('http.plugin.name', plugin.name);
+                if (plugin) {
+                    span.setAttribute('http.plugin.name', plugin.name);
 
-                if (plugin.parseIncommingMessage) {
-                    const attributes = plugin.parseIncommingMessage(request);
-                    span.setAttributes(flatten(attributes));
+                    if (plugin.parseIncommingMessage) {
+                        const attributes = plugin.parseIncommingMessage(request);
+                        span.setAttributes(flatten(attributes));
+                    }
+                }
+
+                // Capture incoming request headers
+                if (options.captureHeaders) {
+                    const headers = request.headers;
+                    if (headers && Object.keys(headers).length > 0) {
+                        span.setAttributes(flatten({ request: { headers } }));
+                    }
+                }
+
+                // Capture incoming request body for server requests (POST, PUT, PATCH)
+                if (options.captureBody && request.method && ['POST', 'PUT', 'PATCH'].includes(request.method)) {
+                    getIncomingRequestBody(request, (body) => {
+                        if (body) {
+                            const contentType = request.headers['content-type'] || '';
+                            const requestData = _parseBodySafe(body, { 'content-type': contentType });
+                            span.setAttribute('request.body', typeof requestData === 'string' ? requestData : JSON.stringify(requestData));
+                        }
+                    });
                 }
             }
 
@@ -113,6 +134,42 @@ const ignoredHosts = [
     'localhost',
     'otlp.kubiks.ai',
 ];
+
+function getIncomingRequestBody(r: IncomingMessage, cb: (body: string) => void) {
+    const chunks: Buffer[] = [];
+    let bodyComplete = false;
+
+    const onData = (chunk: Buffer) => {
+        if (!bodyComplete) {
+            chunks.push(chunk);
+        }
+    };
+
+    const onEnd = () => {
+        if (!bodyComplete) {
+            bodyComplete = true;
+            try {
+                const body = Buffer.concat(chunks).toString('utf8');
+                cb(body);
+            } catch (e) {
+                // If parsing fails, ignore
+            }
+        }
+    };
+
+    const onError = () => {
+        bodyComplete = true;
+    };
+
+    r.on('data', onData);
+    r.on('end', onEnd);
+    r.on('error', onError);
+
+    // If the request is already ended, try to get the body synchronously
+    if (r.complete) {
+        onEnd();
+    }
+}
 
 function getClientRequestBody(r: ClientRequest, cb: (body: string) => void) {
     const chunks: Buffer[] = [];
