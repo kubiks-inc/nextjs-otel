@@ -25,21 +25,14 @@ export class FetchInterceptor {
             ...options
         };
         
-        console.debug('FetchInterceptor: Initializing with options', this.options);
         this.originalFetch = globalThis.fetch;
-        console.debug('FetchInterceptor: Original fetch stored:', typeof this.originalFetch);
         this.interceptFetch();
-        console.debug('FetchInterceptor: Fetch intercepted, new fetch type:', typeof globalThis.fetch);
     }
 
     private interceptFetch() {
         const self = this;
         
         globalThis.fetch = async function(input: any, init?: any): Promise<Response> {
-            console.debug('FetchInterceptor: Intercepted fetch call', { 
-                url: typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-                method: init?.method || 'GET'
-            });
             
             const tracer = trace.getTracer('fetch-interceptor');
             const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;

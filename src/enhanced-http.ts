@@ -29,7 +29,6 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
         // Only instrument incoming server requests
         ignoreIncomingRequestHook: options.ignoreIncomingRequestHook,
     }));
-    console.debug('BetterHttpInstrumentation: Enabled for server-side (incoming requests only)');
     
     // Default to fetch interceptor for outgoing client calls (enableFetchBodyCapture defaults to true)
     if (options.enableFetchBodyCapture !== false) {
@@ -41,7 +40,6 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureHeaders: options.captureHeaders,
                 maxBodySize: 5242880, // 5MB
             });
-            console.debug('Fetch interceptor enabled for outgoing client calls');
         } catch (error) {
             console.warn('Failed to enable fetch body capture:', error.message);
             // Fallback to undici for outgoing calls if fetch interceptor fails
@@ -51,7 +49,6 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureResponseBody: options.captureBody,
                 captureHeaders: options.captureHeaders,
             }));
-            console.debug('EnhancedUndiciInstrumentation: Enabled as fallback for outgoing calls');
         }
     } else {
         // If fetch interceptor is explicitly disabled, use undici for outgoing calls
@@ -62,7 +59,6 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureResponseBody: options.captureBody,
                 captureHeaders: options.captureHeaders,
             }));
-            console.debug('EnhancedUndiciInstrumentation: Enabled for outgoing calls (fetch interceptor disabled)');
         } catch (error) {
             console.warn('EnhancedUndiciInstrumentation not available:', error.message);
         }

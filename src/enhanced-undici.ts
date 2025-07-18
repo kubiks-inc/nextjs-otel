@@ -45,18 +45,12 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
         const enhancedOptions = {
             ...options,
             requestHook: (span: Span, request: UndiciRequest) => {
-                console.debug('EnhancedUndiciInstrumentation: requestHook called', { method: request.method, path: request.path });
                 this.enhancedRequestHook(span, request);
                 if (options.requestHook) {
                     options.requestHook(span, request);
                 }
             },
             responseHook: (span: Span, info: { request: UndiciRequest; response: UndiciResponse }) => {
-                console.debug('EnhancedUndiciInstrumentation: responseHook called', { 
-                    method: info.request.method, 
-                    path: info.request.path,
-                    statusCode: info.response.statusCode 
-                });
                 this.enhancedResponseHook(span, info);
                 if (options.responseHook) {
                     options.responseHook(span, info);
@@ -73,17 +67,10 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
             ...options
         };
         
-        console.debug('EnhancedUndiciInstrumentation: initialized with options', this.options);
     }
 
     private enhancedRequestHook(span: Span, request: UndiciRequest) {
         try {
-            console.debug('EnhancedUndiciInstrumentation: Processing request', {
-                method: request.method,
-                path: request.path,
-                hasBody: !!request.body,
-                contentType: request.contentType
-            });
 
             // Add Kubiks resource attributes
             span.setAttributes({
@@ -97,23 +84,19 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
                 const headers = this.extractHeaders(request.headers);
                 if (headers && Object.keys(headers).length > 0) {
                     span.setAttributes(flatten({ request: { headers } }));
-                    console.debug('EnhancedUndiciInstrumentation: Added request headers');
                 }
             }
 
             // Capture request body (for POST, PUT, PATCH requests)
             if (this.options.captureRequestBody && request.body) {
-                console.debug('EnhancedUndiciInstrumentation: Attempting to capture request body');
                 const contentType = request.contentType || this.getContentTypeFromHeaders(request.headers);
                 if (this.shouldCaptureBody(contentType, request.body)) {
                     const bodyData = this.parseBody(request.body, contentType);
                     if (bodyData !== null) {
                         span.setAttribute('request.body', typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData));
-                        console.debug('EnhancedUndiciInstrumentation: Added request body');
                     }
                 }
             } else if (request.method !== 'GET' && request.method !== 'HEAD') {
-                console.debug('EnhancedUndiciInstrumentation: No request body found for non-GET request');
             }
 
             // Add content type and length as attributes
@@ -126,34 +109,23 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
 
         } catch (error) {
             // Silently fail to avoid breaking the request
-            console.debug('EnhancedUndiciInstrumentation: Error in request hook:', error);
         }
     }
 
     private enhancedResponseHook(span: Span, info: { request: UndiciRequest; response: UndiciResponse }) {
         try {
-            console.debug('EnhancedUndiciInstrumentation: Processing response', {
-                statusCode: info.response.statusCode,
-                hasHeaders: !!info.response.headers
-            });
 
             // Capture response headers
             if (this.options.captureHeaders && info.response.headers) {
                 const headers = this.extractResponseHeaders(info.response.headers);
                 if (headers && Object.keys(headers).length > 0) {
                     span.setAttributes(flatten({ response: { headers } }));
-                    console.debug('EnhancedUndiciInstrumentation: Added response headers');
                     
                     // Check if this response has a body we could potentially capture
                     const contentType = headers['content-type'];
                     const contentLength = headers['content-length'];
                     
                     if (contentType && contentLength && this.options.captureResponseBody) {
-                        console.debug('EnhancedUndiciInstrumentation: Response has body but capture not implemented', {
-                            contentType,
-                            contentLength,
-                            note: 'Undici response body capture requires stream interception - consider using axios for full body capture'
-                        });
                         
                         // Add metadata about the response body that we detected but couldn't capture
                         span.setAttribute('response.body.detected', true);
@@ -171,7 +143,6 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
             span.setAttribute('http.response.status_text', info.response.statusText || '');
 
         } catch (error) {
-            console.debug('EnhancedUndiciInstrumentation: Error in response hook:', error);
         }
     }
 
@@ -201,7 +172,6 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
                 }
             }
         } catch (error) {
-            console.debug('Error parsing headers:', error);
         }
 
         return headerObj;
@@ -219,7 +189,6 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
                 }
             }
         } catch (error) {
-            console.debug('Error parsing response headers:', error);
         }
 
         return headerObj;
