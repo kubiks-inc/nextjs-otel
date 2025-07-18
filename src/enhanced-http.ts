@@ -28,7 +28,7 @@ export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumenta
                 captureRequestBody: options.captureBody,
                 captureResponseBody: options.captureBody,
                 captureHeaders: options.captureHeaders,
-                maxBodySize: 10000,
+                maxBodySize: 5242880, // 5MB
             });
             console.debug('Fetch interceptor enabled as the ONLY HTTP instrumentation');
         } catch (error) {
