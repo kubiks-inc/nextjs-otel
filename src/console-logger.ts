@@ -223,12 +223,31 @@ export function patchConsole(): void {
                 // Get or create trace context
                 const { traceId, spanId } = getOrCreateTraceContext();
 
-                // Create log message
+                // Create log message - preserve raw format without object parsing
                 const message = args
-                    .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
+                    .map((arg) => {
+                        if (typeof arg === "string") {
+                            return arg;
+                        } else if (typeof arg === "number" || typeof arg === "boolean") {
+                            return String(arg);
+                        } else if (arg instanceof Error) {
+                            // For Error objects, include the full stack trace
+                            return arg.stack || arg.message || String(arg);
+                        } else if (typeof arg === "object" && arg !== null) {
+                            // For other objects, use JSON.stringify but handle special cases
+                            try {
+                                return JSON.stringify(arg);
+                            } catch (error) {
+                                // For circular references or other issues, use string representation
+                                return String(arg);
+                            }
+                        } else {
+                            return String(arg);
+                        }
+                    })
                     .join(" ");
 
-                // Build attributes including object parameters
+                // Build basic attributes without object parsing
                 const attributes: Record<string, string> = {
                     source: "console",
                     'log.type': method,
@@ -236,22 +255,6 @@ export function patchConsole(): void {
                     'trace.id': traceId,
                     'span.id': spanId,
                 };
-
-            // Add object parameters to attributes for filtering
-            args.forEach((arg) => {
-                if (typeof arg === "object" && arg !== null && !Array.isArray(arg)) {
-                    try {
-                        // Add individual properties directly using field names
-                        Object.entries(arg).forEach(([key, value]) => {
-                            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-                                attributes[key] = String(value);
-                            }
-                        });
-                    } catch (error) {
-                        // Skip objects that can't be stringified (circular references, etc.)
-                    }
-                }
-            });
 
                 // Send to OpenTelemetry using direct exporter approach
                 const activeSpan = trace.getActiveSpan();
