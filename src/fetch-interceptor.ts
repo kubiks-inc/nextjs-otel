@@ -16,18 +16,58 @@ const SENSITIVE_HEADERS = [
     'proxy-authenticate',
 ];
 
-// Function to redact sensitive headers
-function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+// Function to parse JWT token and extract claims
+function parseJWTClaims(token: string): Record<string, any> | null {
+    try {
+        // Remove "Bearer " prefix if present
+        const cleanToken = token.replace(/^Bearer\s+/i, '');
+        
+        // JWT tokens have 3 parts separated by dots
+        const parts = cleanToken.split('.');
+        if (parts.length !== 3) {
+            return null;
+        }
+        
+        // Decode the payload (second part)
+        const payload = parts[1];
+        
+        // Add padding if needed for base64 decoding
+        const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+        
+        // Decode base64url
+        const decoded = Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+        
+        return JSON.parse(decoded);
+    } catch (error) {
+        return null;
+    }
+}
+
+// Function to redact sensitive headers and extract JWT claims
+function redactSensitiveHeaders(headers: Record<string, string>): { redactedHeaders: Record<string, string>, jwtClaims: Record<string, any> } {
     const redactedHeaders = { ...headers };
+    let jwtClaims: Record<string, any> = {};
     
     for (const key in redactedHeaders) {
         const lowerKey = key.toLowerCase();
         if (SENSITIVE_HEADERS.some(sensitive => lowerKey.includes(sensitive))) {
+            // Check if this is an authorization header and try to parse JWT
+            if (lowerKey.includes('authorization') && redactedHeaders[key]) {
+                const claims = parseJWTClaims(redactedHeaders[key]);
+                if (claims) {
+                    // Add JWT claims as token.* attributes
+                    for (const [claimKey, claimValue] of Object.entries(claims)) {
+                        if (typeof claimValue === 'string' || typeof claimValue === 'number' || typeof claimValue === 'boolean') {
+                            jwtClaims[`token.${claimKey}`] = String(claimValue);
+                        }
+                    }
+                }
+            }
             redactedHeaders[key] = '[REDACTED]';
         }
     }
     
-    return redactedHeaders;
+    return { redactedHeaders, jwtClaims };
 }
 
 interface FetchInterceptorOptions {
@@ -83,8 +123,12 @@ export class FetchInterceptor {
                     // Capture request details
                     if (self.options.captureHeaders && init?.headers) {
                         const headers = self.normalizeHeaders(init.headers);
-                        const redactedHeaders = redactSensitiveHeaders(headers);
+                        const { redactedHeaders, jwtClaims } = redactSensitiveHeaders(headers);
                         span.setAttributes(flatten({ request: { headers: redactedHeaders } }));
+                        // Add JWT claims as span attributes
+                        if (Object.keys(jwtClaims).length > 0) {
+                            span.setAttributes(jwtClaims);
+                        }
                     }
 
                     // Capture request body
@@ -110,8 +154,12 @@ export class FetchInterceptor {
                         response.headers.forEach((value, key) => {
                             responseHeaders[key.toLowerCase()] = value;
                         });
-                        const redactedHeaders = redactSensitiveHeaders(responseHeaders);
+                        const { redactedHeaders, jwtClaims } = redactSensitiveHeaders(responseHeaders);
                         span.setAttributes(flatten({ response: { headers: redactedHeaders } }));
+                        // Add JWT claims as span attributes (for response headers like set-cookie with JWT)
+                        if (Object.keys(jwtClaims).length > 0) {
+                            span.setAttributes(jwtClaims);
+                        }
                     }
 
                     // Capture response body (clone the response to avoid consuming the stream)
