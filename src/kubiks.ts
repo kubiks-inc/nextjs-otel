@@ -48,6 +48,7 @@ function getDefaultInstrumentations(options: KubiksSDKOpts = {}): Instrumentatio
             captureBody: true, // Enable request/response body capture
             captureHeaders: true, // Enable header capture
             enableFetchBodyCapture: options.enableFetchBodyCapture !== false, // Enable full fetch body capture by default
+            serviceName: options.service, // Pass the service name from main SDK configuration
         })
     ];
 }

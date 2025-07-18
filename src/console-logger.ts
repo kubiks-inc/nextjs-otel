@@ -38,6 +38,9 @@ class SimpleOTLPLogExporter {
     async export(logs: any[]): Promise<void> {
         if (logs.length === 0) return;
 
+        // Get current service name (it may have been updated after exporter creation)
+        const currentServiceName = serviceName;
+
         const payload = {
             resourceLogs: [
                 {
@@ -45,7 +48,7 @@ class SimpleOTLPLogExporter {
                         attributes: [
                             {
                                 key: 'service.name',
-                                value: { stringValue: serviceName }
+                                value: { stringValue: currentServiceName }
                             },
                             {
                                 key: 'kubiks.otel.source',
@@ -172,8 +175,8 @@ export function registerOTel(serviceNameParam: string) {
     initializeOTel();
 }
 
-// Initialize with default service name
-initializeOTel();
+// Don't initialize automatically - wait for explicit service name configuration
+// initializeOTel();
 
 let isPatched = false;
 
@@ -211,6 +214,11 @@ function getOrCreateTraceContext(): { traceId: string; spanId: string } {
 export function patchConsole(): void {
     // Prevent double patching
     if (isPatched) return;
+    
+    // Ensure logger is initialized before patching
+    if (!logger) {
+        initializeOTel();
+    }
 
     Object.entries(originalConsole).forEach(([method, originalFn]) => {
         console[method as keyof typeof originalConsole] = (...args: any[]) => {
@@ -251,7 +259,7 @@ export function patchConsole(): void {
                 const attributes: Record<string, string> = {
                     source: "console",
                     'log.type': method,
-                    'service.name': serviceName,
+                    'service.name': serviceName, // This will use the current service name
                     'trace.id': traceId,
                     'span.id': spanId,
                 };
