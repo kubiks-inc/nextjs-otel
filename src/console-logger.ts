@@ -22,9 +22,8 @@ enum SeverityNumber {
     FATAL = 21,
 }
 
-// Initialize context manager
-const contextManager = new AsyncHooksContextManager();
-context.setGlobalContextManager(contextManager);
+// Note: Don't initialize context manager here as it should be done globally by the main SDK
+// The fetch interceptor and console logger should use the same global context manager
 
 // Simple HTTP Log Exporter
 class SimpleOTLPLogExporter {
@@ -179,9 +178,10 @@ initializeOTel();
 let isPatched = false;
 
 function getOrCreateTraceContext(): { traceId: string; spanId: string } {
+    // Try to get active span from the current active context
     const activeSpan = trace.getActiveSpan();
-
-    if (activeSpan) {
+    
+    if (activeSpan && activeSpan.spanContext().traceId !== '00000000000000000000000000000000') {
         const spanContext = activeSpan.spanContext();
         return {
             traceId: spanContext.traceId,
@@ -189,22 +189,22 @@ function getOrCreateTraceContext(): { traceId: string; spanId: string } {
         };
     }
 
-    // No active span, create a new one
-    const span = tracer.startSpan("console-log", {
-        kind: SpanKind.INTERNAL,
-    });
+    // If no active span, try to get from context directly
+    const ctx = context.active();
+    const spanFromContext = trace.getSpan(ctx);
+    
+    if (spanFromContext && spanFromContext.spanContext().traceId !== '00000000000000000000000000000000') {
+        const spanContext = spanFromContext.spanContext();
+        return {
+            traceId: spanContext.traceId,
+            spanId: spanContext.spanId,
+        };
+    }
 
-    const spanContext = span.spanContext();
-
-    // End the span after a short delay to avoid keeping it open indefinitely
-    setTimeout(() => {
-        span.setStatus({ code: SpanStatusCode.OK });
-        span.end();
-    }, 100);
-
+    // No active span found, return empty IDs to indicate no trace context
     return {
-        traceId: spanContext.traceId,
-        spanId: spanContext.spanId,
+        traceId: '',
+        spanId: '',
     };
 }
 
@@ -217,22 +217,25 @@ export function patchConsole(): void {
             // Call original console method first
             originalFn.apply(console, args);
 
-            // Get or create trace context
-            const { traceId, spanId } = getOrCreateTraceContext();
+            // Execute within the current context to ensure trace propagation
+            const currentContext = context.active();
+            context.with(currentContext, () => {
+                // Get or create trace context
+                const { traceId, spanId } = getOrCreateTraceContext();
 
-            // Create log message
-            const message = args
-                .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
-                .join(" ");
+                // Create log message
+                const message = args
+                    .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
+                    .join(" ");
 
-            // Build attributes including object parameters
-            const attributes: Record<string, string> = {
-                source: "console",
-                'log.type': method,
-                'service.name': serviceName,
-                'trace.id': traceId,
-                'span.id': spanId,
-            };
+                // Build attributes including object parameters
+                const attributes: Record<string, string> = {
+                    source: "console",
+                    'log.type': method,
+                    'service.name': serviceName,
+                    'trace.id': traceId,
+                    'span.id': spanId,
+                };
 
             // Add object parameters to attributes for filtering
             args.forEach((arg) => {
@@ -250,24 +253,31 @@ export function patchConsole(): void {
                 }
             });
 
-            // Send to OpenTelemetry using direct exporter approach
-            const activeSpan = trace.getActiveSpan();
-            const logRecord = {
-                timestamp: Date.now(),
-                hrTime: [Math.floor(Date.now() / 1000), (Date.now() % 1000) * 1000000],
-                body: message,
-                severityText: consoleToSeverity[method as keyof typeof consoleToSeverity],
-                severityNumber: consoleToSeverityNumber[method as keyof typeof consoleToSeverityNumber],
-                attributes,
-                spanContext: activeSpan?.spanContext(),
-            };
+                // Send to OpenTelemetry using direct exporter approach
+                const activeSpan = trace.getActiveSpan();
+                
+                const logRecord = {
+                    timestamp: Date.now(),
+                    hrTime: [Math.floor(Date.now() / 1000), (Date.now() % 1000) * 1000000],
+                    body: message,
+                    severityText: consoleToSeverity[method as keyof typeof consoleToSeverity],
+                    severityNumber: consoleToSeverityNumber[method as keyof typeof consoleToSeverityNumber],
+                    attributes: {
+                        ...attributes,
+                        // Override trace context in attributes with the found values
+                        'trace.id': traceId,
+                        'span.id': spanId,
+                    },
+                    spanContext: activeSpan?.spanContext(),
+                };
 
-            // Export directly to avoid complex SDK integration
-            try {
-                exporter.export([logRecord]);
-            } catch (error) {
-                // Silently handle export errors
-            }
+                // Export directly to avoid complex SDK integration
+                try {
+                    exporter.export([logRecord]);
+                } catch (error) {
+                    // Silently handle export errors
+                }
+            });
         };
     });
 

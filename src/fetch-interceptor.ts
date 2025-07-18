@@ -34,7 +34,7 @@ export class FetchInterceptor {
         
         globalThis.fetch = async function(input: any, init?: any): Promise<Response> {
             
-            const tracer = trace.getTracer('fetch-interceptor');
+            const tracer = trace.getTracer('fetch-interceptor', '1.0.15');
             const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
             const method = init?.method || 'GET';
             
