@@ -85,6 +85,13 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
                 contentType: request.contentType
             });
 
+            // Add Kubiks resource attributes
+            span.setAttributes({
+                'kubiks.otel.source': 'otel-nextjs',
+                'kubiks.otel.version': '1.0.11',
+                'kubiks.otel.instrumentation': 'enhanced-undici',
+            });
+
             // Capture headers
             if (this.options.captureHeaders) {
                 const headers = this.extractHeaders(request.headers);

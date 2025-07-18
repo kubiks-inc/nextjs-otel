@@ -26,6 +26,13 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
     options.plugins = options.plugins || [];
     return {
         requestHook(span: Span, request: ClientRequest | IncomingMessage) {
+            // Add Kubiks resource attributes to all HTTP spans
+            span.setAttributes({
+                'kubiks.otel.source': 'otel-nextjs',
+                'kubiks.otel.version': '1.0.11',
+                'kubiks.otel.instrumentation': 'better-http',
+            });
+
             if (request instanceof ClientRequest) {
                 const plugin = options.plugins.find(plugin => plugin?.shouldParseRequest(request)) as HttpPlugin | undefined;
 

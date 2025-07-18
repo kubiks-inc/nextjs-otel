@@ -52,6 +52,9 @@ export class FetchInterceptor {
                     'http.url': url,
                     'http.scheme': new URL(url).protocol.slice(0, -1),
                     'http.host': new URL(url).host,
+                    'kubiks.otel.source': 'otel-nextjs',
+                    'kubiks.otel.version': '1.0.11',
+                    'kubiks.otel.instrumentation': 'fetch-interceptor',
                 }
             }, async (span: Span) => {
                 try {
