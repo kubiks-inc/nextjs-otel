@@ -6,8 +6,7 @@ import { VercelDetector } from './resources/vercel.ts';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { InstrumentationOption, registerInstrumentations } from '@opentelemetry/instrumentation';
 import { ServiceDetector } from './resources/service.ts';
-import { KoyebDetector } from './resources/koyeb.ts';
-import { getEnhancedHttpInstrumentations, EnhancedHttpInstrumentationOptions } from './enhanced-http.ts';
+import { getEnhancedHttpInstrumentations } from './enhanced-http.ts';
 import { VercelPlugin } from './http-plugins/vercel.ts';
 
 type KubiksSDKOpts = {
@@ -92,7 +91,6 @@ export class KubiksSDK {
                 detectors: [
                     awsLambdaDetector,
                     new VercelDetector(),
-                    new KoyebDetector(),
                     ...(this.options.resourceDetectors || []),
                     new ServiceDetector({ serviceName: this.options.service, attributes: this.options.resourceAttributes })
                 ],
