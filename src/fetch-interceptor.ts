@@ -1,6 +1,35 @@
 import { trace, SpanKind, SpanStatusCode, Span } from '@opentelemetry/api';
 import { flatten } from 'flat';
 
+// List of sensitive headers to redact
+const SENSITIVE_HEADERS = [
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-auth-token',
+    'x-access-token',
+    'x-kubiks-key',
+    'bearer',
+    'proxy-authorization',
+    'www-authenticate',
+    'proxy-authenticate',
+];
+
+// Function to redact sensitive headers
+function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+    const redactedHeaders = { ...headers };
+    
+    for (const key in redactedHeaders) {
+        const lowerKey = key.toLowerCase();
+        if (SENSITIVE_HEADERS.some(sensitive => lowerKey.includes(sensitive))) {
+            redactedHeaders[key] = '[REDACTED]';
+        }
+    }
+    
+    return redactedHeaders;
+}
+
 interface FetchInterceptorOptions {
     captureRequestBody?: boolean;
     captureResponseBody?: boolean;
@@ -54,7 +83,8 @@ export class FetchInterceptor {
                     // Capture request details
                     if (self.options.captureHeaders && init?.headers) {
                         const headers = self.normalizeHeaders(init.headers);
-                        span.setAttributes(flatten({ request: { headers } }));
+                        const redactedHeaders = redactSensitiveHeaders(headers);
+                        span.setAttributes(flatten({ request: { headers: redactedHeaders } }));
                     }
 
                     // Capture request body
@@ -80,7 +110,8 @@ export class FetchInterceptor {
                         response.headers.forEach((value, key) => {
                             responseHeaders[key.toLowerCase()] = value;
                         });
-                        span.setAttributes(flatten({ response: { headers: responseHeaders } }));
+                        const redactedHeaders = redactSensitiveHeaders(responseHeaders);
+                        span.setAttributes(flatten({ response: { headers: redactedHeaders } }));
                     }
 
                     // Capture response body (clone the response to avoid consuming the stream)

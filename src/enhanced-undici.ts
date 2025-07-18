@@ -3,6 +3,35 @@ import { UndiciInstrumentation, UndiciInstrumentationConfig } from '@opentelemet
 import { flatten } from 'flat';
 import { parse } from 'querystring';
 
+// List of sensitive headers to redact
+const SENSITIVE_HEADERS = [
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-auth-token',
+    'x-access-token',
+    'x-kubiks-key',
+    'bearer',
+    'proxy-authorization',
+    'www-authenticate',
+    'proxy-authenticate',
+];
+
+// Function to redact sensitive headers
+function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+    const redactedHeaders = { ...headers };
+    
+    for (const key in redactedHeaders) {
+        const lowerKey = key.toLowerCase();
+        if (SENSITIVE_HEADERS.some(sensitive => lowerKey.includes(sensitive))) {
+            redactedHeaders[key] = '[REDACTED]';
+        }
+    }
+    
+    return redactedHeaders;
+}
+
 interface UndiciRequest {
     origin: string;
     method: string;
@@ -83,7 +112,8 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
             if (this.options.captureHeaders) {
                 const headers = this.extractHeaders(request.headers);
                 if (headers && Object.keys(headers).length > 0) {
-                    span.setAttributes(flatten({ request: { headers } }));
+                    const redactedHeaders = redactSensitiveHeaders(headers);
+                    span.setAttributes(flatten({ request: { headers: redactedHeaders } }));
                 }
             }
 
@@ -119,7 +149,8 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
             if (this.options.captureHeaders && info.response.headers) {
                 const headers = this.extractResponseHeaders(info.response.headers);
                 if (headers && Object.keys(headers).length > 0) {
-                    span.setAttributes(flatten({ response: { headers } }));
+                    const redactedHeaders = redactSensitiveHeaders(headers);
+                    span.setAttributes(flatten({ response: { headers: redactedHeaders } }));
                     
                     // Check if this response has a body we could potentially capture
                     const contentType = headers['content-type'];

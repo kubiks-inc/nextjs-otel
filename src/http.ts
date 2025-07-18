@@ -7,6 +7,35 @@ import { HttpInstrumentationConfig } from "./http/types.ts"
 import { parse } from 'querystring'
 import { PassThrough } from "stream";
 
+// List of sensitive headers to redact
+const SENSITIVE_HEADERS = [
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-auth-token',
+    'x-access-token',
+    'x-kubiks-key',
+    'bearer',
+    'proxy-authorization',
+    'www-authenticate',
+    'proxy-authenticate',
+];
+
+// Function to redact sensitive headers
+function redactSensitiveHeaders(headers: Record<string, any>): Record<string, any> {
+    const redactedHeaders = { ...headers };
+    
+    for (const key in redactedHeaders) {
+        const lowerKey = key.toLowerCase();
+        if (SENSITIVE_HEADERS.some(sensitive => lowerKey.includes(sensitive))) {
+            redactedHeaders[key] = '[REDACTED]';
+        }
+    }
+    
+    return redactedHeaders;
+}
+
 export type BetterHttpInstrumentationOptions = {
     plugins?: HttpPlugin[],
     captureBody?: boolean,
@@ -43,7 +72,8 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
 
 
                     if (options.captureHeaders) {
-                        span.setAttributes(flatten({ request: { headers } }));
+                        const redactedHeaders = redactSensitiveHeaders(headers);
+                        span.setAttributes(flatten({ request: { headers: redactedHeaders } }));
                     }
                     if (plugin.captureBody) {
                         getClientRequestBody(request, (body) => {
@@ -57,7 +87,8 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
 
 
                     if (options.captureHeaders) {
-                        span.setAttributes(flatten({ request: { headers } }));
+                        const redactedHeaders = redactSensitiveHeaders(headers);
+                        span.setAttributes(flatten({ request: { headers: redactedHeaders } }));
                     }
 
                     if (options.captureBody && shouldCaptureBody(request.host)) {
@@ -90,7 +121,8 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
                 try {
                     const headers = response.headers;
                     if (options.captureHeaders) {
-                        span.setAttributes(flatten({ response: { headers } }));
+                        const redactedHeaders = redactSensitiveHeaders(headers);
+                        span.setAttributes(flatten({ response: { headers: redactedHeaders } }));
                     }
 
 
