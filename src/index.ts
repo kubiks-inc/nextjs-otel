@@ -6,3 +6,13 @@ export { enableFetchBodyCapture, disableFetchBodyCapture } from './fetch-interce
 export { StripePlugin } from './http-plugins/stripe.ts';
 export { HttpPlugin } from './http-plugins/plugin.ts';
 export { VercelPlugin } from './http-plugins/vercel.ts';
+export { 
+    patchConsole, 
+    registerOTel, 
+    flushLogs, 
+    startTrace, 
+    runInTrace, 
+    runInTraceAsync,
+    logProvider,
+    tracer
+} from './console-logger.ts';

@@ -2,6 +2,7 @@ import { InstrumentationOption } from "@opentelemetry/instrumentation";
 import { BetterHttpInstrumentation, BetterHttpInstrumentationOptions } from "./http.ts";
 import { EnhancedUndiciInstrumentation } from "./enhanced-undici.ts";
 import { enableFetchBodyCapture } from "./fetch-interceptor.ts";
+import { patchConsole, registerOTel } from "./console-logger.ts";
 
 export interface EnhancedHttpInstrumentationOptions extends BetterHttpInstrumentationOptions {
     /**
@@ -11,6 +12,16 @@ export interface EnhancedHttpInstrumentationOptions extends BetterHttpInstrument
      * @default true (fetch interceptor only to prevent duplicate spans)
      */
     enableFetchBodyCapture?: boolean;
+    /**
+     * Enable console log interception to send logs to OpenTelemetry
+     * @default true
+     */
+    enableConsoleLogging?: boolean;
+    /**
+     * Service name for OpenTelemetry traces and logs
+     * @default 'nextjs-app'
+     */
+    serviceName?: string;
 }
 
 /**
@@ -19,6 +30,13 @@ export interface EnhancedHttpInstrumentationOptions extends BetterHttpInstrument
  */
 export function getEnhancedHttpInstrumentations(options: EnhancedHttpInstrumentationOptions = {}): InstrumentationOption[] {
     const instrumentations: InstrumentationOption[] = [];
+    
+    // Initialize console logging if enabled (default: true)
+    if (options.enableConsoleLogging !== false) {
+        const serviceName = options.serviceName || 'nextjs-app';
+        registerOTel(serviceName);
+        patchConsole();
+    }
     
     // ALWAYS include server-side HTTP instrumentation for incoming Next.js requests
     // This is configured to only instrument incoming requests, not outgoing client calls
