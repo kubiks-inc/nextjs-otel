@@ -16,3 +16,4 @@ export {
     logProvider,
     tracer
 } from './console-logger.ts';
+export { getPackageVersion } from './version.ts';

@@ -6,6 +6,7 @@ import { HttpInstrumentation } from "./http/index.ts";
 import { HttpInstrumentationConfig } from "./http/types.ts"
 import { parse } from 'querystring'
 import { PassThrough } from "stream";
+import { getPackageVersion } from "./version.js";
 
 // List of sensitive headers to redact
 const SENSITIVE_HEADERS = [
@@ -98,7 +99,7 @@ export function _betterHttpInstrumentation(options: BetterHttpInstrumentationOpt
             // Add Kubiks resource attributes to all HTTP spans
             span.setAttributes({
                 'kubiks.otel.source': 'otel-nextjs',
-                'kubiks.otel.version': '1.0.11',
+                'kubiks.otel.version': getPackageVersion(),
                 'kubiks.otel.instrumentation': 'better-http',
             });
 

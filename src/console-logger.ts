@@ -11,6 +11,7 @@ import {
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { getPackageVersion } from "./version.js";
 
 // Define severity numbers locally since they're not exported from @opentelemetry/api
 enum SeverityNumber {
@@ -62,7 +63,7 @@ class SimpleOTLPLogExporter {
                     },
                     scopeLogs: [
                         {
-                            scope: { name: 'console-logger', version: '1.0.15' },
+                            scope: { name: 'console-logger', version: getPackageVersion() },
                             logRecords: logs.map(log => {
                                 // Extract trace context from log record
                                 const spanContext = log.spanContext;
@@ -156,7 +157,7 @@ function initializeOTel() {
     // Create resource with service name
     const resource = new Resource({
         [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
-        [SemanticResourceAttributes.SERVICE_VERSION]: "1.0.15",
+        [SemanticResourceAttributes.SERVICE_VERSION]: getPackageVersion(),
         'kubiks.otel.source': 'otel-nextjs',
         'kubiks.otel.instrumentation': 'console-logger',
     });
@@ -165,8 +166,8 @@ function initializeOTel() {
     const processor = new BatchLogRecordProcessor(exporter as any);
     provider.addLogRecordProcessor(processor);
 
-    logger = provider.getLogger('console-logger', '1.0.15');
-    tracer = trace.getTracer(serviceName, "1.0.15");
+    logger = provider.getLogger('console-logger', getPackageVersion());
+    tracer = trace.getTracer(serviceName, getPackageVersion());
 }
 
 // Register OpenTelemetry with custom service name
@@ -263,6 +264,17 @@ export function patchConsole(): void {
                     'trace.id': traceId,
                     'span.id': spanId,
                 };
+
+                // Add error-specific attributes if any arguments are Error objects
+                args.forEach((arg, index) => {
+                    if (arg instanceof Error) {
+                        attributes[`error.${index}.type`] = arg.constructor.name;
+                        attributes[`error.${index}.message`] = arg.message;
+                        if (arg.stack) {
+                            attributes[`error.${index}.stack`] = arg.stack;
+                        }
+                    }
+                });
 
                 // Send to OpenTelemetry using direct exporter approach
                 const activeSpan = trace.getActiveSpan();
@@ -361,6 +373,35 @@ export function runInTrace<T>(name: string, fn: () => T): T {
                 code: SpanStatusCode.ERROR,
                 message: error instanceof Error ? error.message : String(error)
             });
+            
+            // Add detailed error information to span
+            if (error instanceof Error) {
+                span.setAttributes({
+                    'error.type': error.constructor.name,
+                    'error.message': error.message,
+                    'error.stack': error.stack || 'No stack trace available'
+                });
+                
+                // Add error event to span for better observability
+                span.addEvent('exception', {
+                    'exception.type': error.constructor.name,
+                    'exception.message': error.message,
+                    'exception.stacktrace': error.stack || 'No stack trace available'
+                });
+            } else {
+                span.setAttributes({
+                    'error.type': 'Unknown',
+                    'error.message': String(error),
+                    'error.stack': 'No stack trace available'
+                });
+                
+                span.addEvent('exception', {
+                    'exception.type': 'Unknown',
+                    'exception.message': String(error),
+                    'exception.stacktrace': 'No stack trace available'
+                });
+            }
+            
             throw error;
         } finally {
             span.end();
@@ -384,6 +425,35 @@ export async function runInTraceAsync<T>(name: string, fn: () => Promise<T>): Pr
                 code: SpanStatusCode.ERROR,
                 message: error instanceof Error ? error.message : String(error)
             });
+            
+            // Add detailed error information to span
+            if (error instanceof Error) {
+                span.setAttributes({
+                    'error.type': error.constructor.name,
+                    'error.message': error.message,
+                    'error.stack': error.stack || 'No stack trace available'
+                });
+                
+                // Add error event to span for better observability
+                span.addEvent('exception', {
+                    'exception.type': error.constructor.name,
+                    'exception.message': error.message,
+                    'exception.stacktrace': error.stack || 'No stack trace available'
+                });
+            } else {
+                span.setAttributes({
+                    'error.type': 'Unknown',
+                    'error.message': String(error),
+                    'error.stack': 'No stack trace available'
+                });
+                
+                span.addEvent('exception', {
+                    'exception.type': 'Unknown',
+                    'exception.message': String(error),
+                    'exception.stacktrace': 'No stack trace available'
+                });
+            }
+            
             throw error;
         } finally {
             span.end();

@@ -2,6 +2,7 @@ import { Span } from '@opentelemetry/api';
 import { UndiciInstrumentation, UndiciInstrumentationConfig } from '@opentelemetry/instrumentation-undici';
 import { flatten } from 'flat';
 import { parse } from 'querystring';
+import { getPackageVersion } from './version.js';
 
 // List of sensitive headers to redact
 const SENSITIVE_HEADERS = [
@@ -144,7 +145,7 @@ export class EnhancedUndiciInstrumentation extends UndiciInstrumentation {
             // Add Kubiks resource attributes
             span.setAttributes({
                 'kubiks.otel.source': 'otel-nextjs',
-                'kubiks.otel.version': '1.0.11',
+                'kubiks.otel.version': getPackageVersion(),
                 'kubiks.otel.instrumentation': 'enhanced-undici',
             });
 

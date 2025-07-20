@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "before:init": ["npm run check"],
+    "after:bump": ["npm run update-version"],
+    "after:release": "echo Successfully released ${name} v${version} to ${repo.repository}."
+  },
+  "git": {
+    "commitMessage": "Release v${version}",
+    "tagName": "v${version}"
+  },
+  "npm": {
+    "publish": true
+  },
+  "github": {
+    "release": true
+  }
+}

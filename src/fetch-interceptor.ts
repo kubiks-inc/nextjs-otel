@@ -1,5 +1,6 @@
 import { trace, SpanKind, SpanStatusCode, Span } from '@opentelemetry/api';
 import { flatten } from 'flat';
+import { getPackageVersion } from './version.js';
 
 // List of sensitive headers to redact
 const SENSITIVE_HEADERS = [
@@ -21,22 +22,22 @@ function parseJWTClaims(token: string): Record<string, any> | null {
     try {
         // Remove "Bearer " prefix if present
         const cleanToken = token.replace(/^Bearer\s+/i, '');
-        
+
         // JWT tokens have 3 parts separated by dots
         const parts = cleanToken.split('.');
         if (parts.length !== 3) {
             return null;
         }
-        
+
         // Decode the payload (second part)
         const payload = parts[1];
-        
+
         // Add padding if needed for base64 decoding
         const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
-        
+
         // Decode base64url
         const decoded = Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-        
+
         return JSON.parse(decoded);
     } catch (error) {
         return null;
@@ -47,7 +48,7 @@ function parseJWTClaims(token: string): Record<string, any> | null {
 function redactSensitiveHeaders(headers: Record<string, string>): { redactedHeaders: Record<string, string>, jwtClaims: Record<string, any> } {
     const redactedHeaders = { ...headers };
     let jwtClaims: Record<string, any> = {};
-    
+
     for (const key in redactedHeaders) {
         const lowerKey = key.toLowerCase();
         if (SENSITIVE_HEADERS.some(sensitive => lowerKey.includes(sensitive))) {
@@ -66,7 +67,7 @@ function redactSensitiveHeaders(headers: Record<string, string>): { redactedHead
             redactedHeaders[key] = '[REDACTED]';
         }
     }
-    
+
     return { redactedHeaders, jwtClaims };
 }
 
@@ -93,20 +94,20 @@ export class FetchInterceptor {
             maxBodySize: 10000,
             ...options
         };
-        
+
         this.originalFetch = globalThis.fetch;
         this.interceptFetch();
     }
 
     private interceptFetch() {
         const self = this;
-        
-        globalThis.fetch = async function(input: any, init?: any): Promise<Response> {
-            
-            const tracer = trace.getTracer('fetch-interceptor', '1.0.15');
+
+        globalThis.fetch = async function (input: any, init?: any): Promise<Response> {
+
+            const tracer = trace.getTracer('fetch-interceptor', getPackageVersion());
             const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
             const method = init?.method || 'GET';
-            
+
             return tracer.startActiveSpan(`fetch ${method}`, {
                 kind: SpanKind.CLIENT,
                 attributes: {
@@ -115,7 +116,7 @@ export class FetchInterceptor {
                     'http.scheme': new URL(url).protocol.slice(0, -1),
                     'http.host': new URL(url).host,
                     'kubiks.otel.source': 'otel-nextjs',
-                    'kubiks.otel.version': '1.0.11',
+                    'kubiks.otel.version': getPackageVersion(),
                     'kubiks.otel.instrumentation': 'fetch-interceptor',
                 }
             }, async (span: Span) => {
@@ -191,12 +192,12 @@ export class FetchInterceptor {
     private async captureRequestBody(body: BodyInit, headers?: HeadersInit): Promise<any> {
         try {
             const contentType = this.getContentType(headers);
-            
+
             if (body instanceof FormData) {
                 // Don't capture FormData (likely file uploads)
                 return { _type: 'FormData', _note: 'FormData not captured (likely contains files)' };
             }
-            
+
             if (body instanceof URLSearchParams) {
                 const obj: Record<string, string> = {};
                 body.forEach((value, key) => {
@@ -204,30 +205,30 @@ export class FetchInterceptor {
                 });
                 return obj;
             }
-            
+
             if (body instanceof ReadableStream) {
                 // Don't consume streams
                 return { _type: 'ReadableStream', _note: 'Stream not captured' };
             }
-            
+
             if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
                 // Check if it's likely binary
                 const bytes = new Uint8Array(body instanceof ArrayBuffer ? body : body.buffer);
                 if (this.isBinary(bytes)) {
                     return { _type: 'Binary', _size: bytes.length, _note: 'Binary data not captured' };
                 }
-                
+
                 const text = new TextDecoder().decode(bytes);
                 return this.parseBodyText(text, contentType);
             }
-            
+
             if (typeof body === 'string') {
                 if (body.length > this.options.maxBodySize!) {
                     return { _truncated: true, _size: body.length, _preview: body.substring(0, 100) };
                 }
                 return this.parseBodyText(body, contentType);
             }
-            
+
             return body;
         } catch (error) {
             return { _error: 'Failed to capture request body', _message: error instanceof Error ? error.message : 'Unknown error' };
@@ -238,36 +239,36 @@ export class FetchInterceptor {
         try {
             const contentType = response.headers.get('content-type') || '';
             const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-            
+
             // Skip large responses
             if (contentLength > this.options.maxBodySize!) {
-                return { 
-                    _truncated: true, 
-                    _size: contentLength, 
-                    _note: `Response too large (${contentLength} bytes)` 
+                return {
+                    _truncated: true,
+                    _size: contentLength,
+                    _note: `Response too large (${contentLength} bytes)`
                 };
             }
-            
+
             // Skip binary content
             if (this.isBinaryContentType(contentType)) {
-                return { 
-                    _type: 'Binary', 
-                    _contentType: contentType, 
-                    _size: contentLength, 
-                    _note: 'Binary content not captured' 
+                return {
+                    _type: 'Binary',
+                    _contentType: contentType,
+                    _size: contentLength,
+                    _note: 'Binary content not captured'
                 };
             }
-            
+
             const text = await response.text();
-            
+
             if (text.length > this.options.maxBodySize!) {
-                return { 
-                    _truncated: true, 
-                    _size: text.length, 
-                    _preview: text.substring(0, 100) 
+                return {
+                    _truncated: true,
+                    _size: text.length,
+                    _preview: text.substring(0, 100)
                 };
             }
-            
+
             return this.parseBodyText(text, contentType);
         } catch (error) {
             return { _error: 'Failed to capture response body', _message: error instanceof Error ? error.message : 'Unknown error' };
@@ -284,9 +285,9 @@ export class FetchInterceptor {
                     return text;
                 }
             }
-            
+
             const lowerContentType = contentType.toLowerCase();
-            
+
             if (lowerContentType.includes('application/json')) {
                 return JSON.parse(text);
             } else if (lowerContentType.includes('application/x-www-form-urlencoded')) {
@@ -308,7 +309,7 @@ export class FetchInterceptor {
 
     private normalizeHeaders(headers: HeadersInit): Record<string, string> {
         const normalized: Record<string, string> = {};
-        
+
         if (headers instanceof Headers) {
             headers.forEach((value, key) => {
                 normalized[key.toLowerCase()] = value;
@@ -322,23 +323,23 @@ export class FetchInterceptor {
                 normalized[key.toLowerCase()] = value;
             }
         }
-        
+
         return normalized;
     }
 
     private getContentType(headers?: HeadersInit): string | undefined {
         if (!headers) return undefined;
-        
+
         const normalized = this.normalizeHeaders(headers);
         return normalized['content-type'];
     }
 
     private isBinary(bytes: Uint8Array): boolean {
         // Simple heuristic: if more than 30% of bytes are non-printable, consider it binary
-        const nonPrintableCount = Array.from(bytes).filter(byte => 
+        const nonPrintableCount = Array.from(bytes).filter(byte =>
             byte < 32 && byte !== 9 && byte !== 10 && byte !== 13
         ).length;
-        
+
         return nonPrintableCount / bytes.length > 0.3;
     }
 
@@ -352,7 +353,7 @@ export class FetchInterceptor {
             'application/zip',
             'multipart/form-data',
         ];
-        
+
         const lowerContentType = contentType.toLowerCase();
         return binaryTypes.some(type => lowerContentType.includes(type));
     }

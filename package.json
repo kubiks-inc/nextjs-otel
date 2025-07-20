@@ -33,7 +33,8 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "build": "tsup",
+    "build": "npm run update-version && tsup",
+    "update-version": "node scripts/update-version.js",
     "test": "vitest",
     "release": "release-it"
   },
