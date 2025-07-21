@@ -9,9 +9,11 @@ import {
     SpanKind,
 } from "@opentelemetry/api";
 import { AsyncHooksContextManager } from "@opentelemetry/context-async-hooks";
-import { Resource } from "@opentelemetry/resources";
+import { Resource, detectResourcesSync } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { getPackageVersion } from "./version.js";
+import { VercelDetector } from './resources/vercel.js';
+import { awsLambdaDetector } from '@opentelemetry/resource-detector-aws';
 
 // Define severity numbers locally since they're not exported from @opentelemetry/api
 enum SeverityNumber {
@@ -39,27 +41,21 @@ class SimpleOTLPLogExporter {
     async export(logs: any[]): Promise<void> {
         if (logs.length === 0) return;
 
-        // Get current service name (it may have been updated after exporter creation)
-        const currentServiceName = serviceName;
+        // Get the current resource that includes all detected attributes
+        const currentResource = globalResource;
+        const resourceAttributes = currentResource?.attributes || {};
+
+        // Convert resource attributes to OTLP format
+        const resourceAttributesArray = Object.entries(resourceAttributes).map(([key, value]) => ({
+            key,
+            value: { stringValue: String(value) }
+        }));
 
         const payload = {
             resourceLogs: [
                 {
                     resource: {
-                        attributes: [
-                            {
-                                key: 'service.name',
-                                value: { stringValue: currentServiceName }
-                            },
-                            {
-                                key: 'kubiks.otel.source',
-                                value: { stringValue: 'otel-nextjs' }
-                            },
-                            {
-                                key: 'kubiks.otel.instrumentation',
-                                value: { stringValue: 'console-logger' }
-                            }
-                        ]
+                        attributes: resourceAttributesArray
                     },
                     scopeLogs: [
                         {
@@ -143,6 +139,7 @@ let provider: LoggerProvider;
 let logger: any;
 let tracer: any;
 let exporter: SimpleOTLPLogExporter;
+let globalResource: Resource; // Store the detected resource globally
 
 // Initialize OpenTelemetry components
 function initializeOTel() {
@@ -154,15 +151,26 @@ function initializeOTel() {
         } : {},
     });
 
-    // Create resource with service name
-    const resource = new Resource({
+    // Detect resources using the same detectors as the main SDK
+    globalResource = detectResourcesSync({
+        detectors: [
+            awsLambdaDetector,
+            new VercelDetector(),
+        ],
+    });
+
+    // Merge with console logger specific attributes
+    const consoleLoggerResource = new Resource({
         [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
         [SemanticResourceAttributes.SERVICE_VERSION]: getPackageVersion(),
         'kubiks.otel.source': 'otel-nextjs',
         'kubiks.otel.instrumentation': 'console-logger',
     });
 
-    provider = new LoggerProvider({ resource });
+    // Merge detected resource with console logger resource
+    const mergedResource = globalResource.merge(consoleLoggerResource);
+
+    provider = new LoggerProvider({ resource: mergedResource });
     const processor = new BatchLogRecordProcessor(exporter as any);
     provider.addLogRecordProcessor(processor);
 
@@ -184,7 +192,7 @@ let isPatched = false;
 function getOrCreateTraceContext(): { traceId: string; spanId: string } {
     // Try to get active span from the current active context
     const activeSpan = trace.getActiveSpan();
-    
+
     if (activeSpan && activeSpan.spanContext().traceId !== '00000000000000000000000000000000') {
         const spanContext = activeSpan.spanContext();
         return {
@@ -196,7 +204,7 @@ function getOrCreateTraceContext(): { traceId: string; spanId: string } {
     // If no active span, try to get from context directly
     const ctx = context.active();
     const spanFromContext = trace.getSpan(ctx);
-    
+
     if (spanFromContext && spanFromContext.spanContext().traceId !== '00000000000000000000000000000000') {
         const spanContext = spanFromContext.spanContext();
         return {
@@ -215,7 +223,7 @@ function getOrCreateTraceContext(): { traceId: string; spanId: string } {
 export function patchConsole(): void {
     // Prevent double patching
     if (isPatched) return;
-    
+
     // Ensure logger is initialized before patching
     if (!logger) {
         initializeOTel();
@@ -278,7 +286,7 @@ export function patchConsole(): void {
 
                 // Send to OpenTelemetry using direct exporter approach
                 const activeSpan = trace.getActiveSpan();
-                
+
                 const logRecord = {
                     timestamp: Date.now(),
                     hrTime: [Math.floor(Date.now() / 1000), (Date.now() % 1000) * 1000000],
@@ -373,7 +381,7 @@ export function runInTrace<T>(name: string, fn: () => T): T {
                 code: SpanStatusCode.ERROR,
                 message: error instanceof Error ? error.message : String(error)
             });
-            
+
             // Add detailed error information to span
             if (error instanceof Error) {
                 span.setAttributes({
@@ -381,7 +389,7 @@ export function runInTrace<T>(name: string, fn: () => T): T {
                     'error.message': error.message,
                     'error.stack': error.stack || 'No stack trace available'
                 });
-                
+
                 // Add error event to span for better observability
                 span.addEvent('exception', {
                     'exception.type': error.constructor.name,
@@ -394,14 +402,14 @@ export function runInTrace<T>(name: string, fn: () => T): T {
                     'error.message': String(error),
                     'error.stack': 'No stack trace available'
                 });
-                
+
                 span.addEvent('exception', {
                     'exception.type': 'Unknown',
                     'exception.message': String(error),
                     'exception.stacktrace': 'No stack trace available'
                 });
             }
-            
+
             throw error;
         } finally {
             span.end();
@@ -425,7 +433,7 @@ export async function runInTraceAsync<T>(name: string, fn: () => Promise<T>): Pr
                 code: SpanStatusCode.ERROR,
                 message: error instanceof Error ? error.message : String(error)
             });
-            
+
             // Add detailed error information to span
             if (error instanceof Error) {
                 span.setAttributes({
@@ -433,7 +441,7 @@ export async function runInTraceAsync<T>(name: string, fn: () => Promise<T>): Pr
                     'error.message': error.message,
                     'error.stack': error.stack || 'No stack trace available'
                 });
-                
+
                 // Add error event to span for better observability
                 span.addEvent('exception', {
                     'exception.type': error.constructor.name,
@@ -446,14 +454,14 @@ export async function runInTraceAsync<T>(name: string, fn: () => Promise<T>): Pr
                     'error.message': String(error),
                     'error.stack': 'No stack trace available'
                 });
-                
+
                 span.addEvent('exception', {
                     'exception.type': 'Unknown',
                     'exception.message': String(error),
                     'exception.stacktrace': 'No stack trace available'
                 });
             }
-            
+
             throw error;
         } finally {
             span.end();
