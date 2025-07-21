@@ -22,16 +22,16 @@ export class VercelDetector implements DetectorSync {
             return Resource.empty();
         }
 
-       
+
         const gitBranchUrl = String(process.env.VERCEL_BRANCH_URL);
         let serviceName: string;
         let serviceNamespace: string;
 
-        if(gitBranchUrl) {
-            try { 
+        if (gitBranchUrl) {
+            try {
                 serviceName = gitBranchUrl.split('-git-')[0]
                 serviceNamespace = serviceName;
-            } catch(e) {
+            } catch (e) {
             }
         }
 
@@ -48,6 +48,10 @@ export class VercelDetector implements DetectorSync {
             'vercel.url.branch': String(process.env.VERCEL_BRANCH_URL),
             'vercel.git.provider': String(process.env.VERCEL_GIT_PROVIDER),
             'vercel.git.repo': String(process.env.VERCEL_GIT_REPO_SLUG),
+            'vercel.git.repo.owner': String(process.env.VERCEL_GIT_REPO_OWNER),
+            'vercel.git.repo.full': process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG
+                ? `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`
+                : String(process.env.VERCEL_GIT_REPO_SLUG),
             'vercel.git.commit': String(process.env.VERCEL_GIT_COMMIT_SHA),
             'vercel.git.message': String(process.env.VERCEL_GIT_COMMIT_MESSAGE),
             'vercel.git.author': String(process.env.VERCEL_GIT_COMMIT_AUTHOR_NAME),
