@@ -1,6 +1,6 @@
 {
   "name": "@kubiks/otel-nextjs",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Instrument node.js applications with open telemetry ",
   "type": "module",
   "exports": {
