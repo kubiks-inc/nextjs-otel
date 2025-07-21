@@ -3,7 +3,7 @@
  * This is automatically updated during the release process
  * @constant
  */
-export const PACKAGE_VERSION = '1.0.20';
+export const PACKAGE_VERSION = '1.0.21';
 
 /**
  * Gets the current package version
