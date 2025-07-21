@@ -2,7 +2,7 @@
 
 Instrument your Node.js applications with OpenTelemetry and send the traces to [Kubiks](https://kubiks.ai).
 
-![Kubiks ServiceMap](./traces.png)
+![Kubiks ServiceMap](./content/servicemap.png)
   
 ## Example
 
